@@ -1,0 +1,363 @@
+{
+  "name": "SOCIAL_C_PUBBLICA_APPROVATI",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "*/15 * * * *" }] } },
+      "id": "n1",
+      "name": "Schedule 15min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [120, 300]
+    },
+    {
+      "parameters": { "operation": "read", "documentId": "={{ $env.SHEET_ID }}", "sheetName": "SETTINGS" },
+      "id": "n2",
+      "name": "Read SETTINGS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [320, 200],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": { "operation": "read", "documentId": "={{ $env.SHEET_ID }}", "sheetName": "CALENDARIO" },
+      "id": "n3",
+      "name": "Read CALENDARIO",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [320, 320],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": { "operation": "read", "documentId": "={{ $env.SHEET_ID }}", "sheetName": "ACCOUNT_SOCIAL" },
+      "id": "n4",
+      "name": "Read ACCOUNT_SOCIAL",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [320, 440],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": { "operation": "read", "documentId": "={{ $env.SHEET_ID }}", "sheetName": "PRODOTTI" },
+      "id": "n5",
+      "name": "Read PRODOTTI",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [320, 560],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": { "operation": "read", "documentId": "={{ $env.SHEET_ID }}", "sheetName": "PROMO" },
+      "id": "n6",
+      "name": "Read PROMO",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [320, 680],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse settings to map\nconst settings = {};\nfor (const i of $('Read SETTINGS').all()) settings[i.json.chiave] = i.json.valore;\nif (String(settings.automation_enabled).toUpperCase() !== 'TRUE') return [];\n\nconst dryRun = String(settings.dry_run).toUpperCase() === 'TRUE';\nconst maxRetry = parseInt(settings.max_retry || '2', 10);\nconst defaultUtm = settings.default_utm_campaign || 'social_default';\nconst stockCheck = String(settings.stock_check_required).toUpperCase() === 'TRUE';\nconst mediaCheck = String(settings.media_validation_required).toUpperCase() === 'TRUE';\n\nconst accounts = $('Read ACCOUNT_SOCIAL').all().map(i => i.json);\nconst products = $('Read PRODOTTI').all().map(i => i.json);\nconst promos = $('Read PROMO').all().map(i => i.json);\nconst rows = $('Read CALENDARIO').all().map(i => i.json);\n\nconst now = new Date();\nconst pad = n => String(n).padStart(2,'0');\nconst todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;\nconst hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;\nconst nowIso = now.toISOString();\n\nconst out = [];\nfor (const r of rows) {\n  // base filter\n  if (r.status !== 'APPROVATO') continue;\n  if (r.publish_lock_id && String(r.publish_lock_id).trim() !== '') continue;\n  if (!r.data_pubblicazione || r.data_pubblicazione > todayStr) continue;\n  if (r.data_pubblicazione === todayStr && (r.ora_pubblicazione || '00:00') > hhmm) continue;\n\n  // mandatory fields\n  const errs = [];\n  if (!r.caption || !String(r.caption).trim()) errs.push('caption vuota');\n  if (!r.canale) errs.push('canale vuoto');\n  if (!r.formato) errs.push('formato vuoto');\n  if (!r.link_media_1) errs.push('link_media_1 vuoto');\n  if (!r.media_type) errs.push('media_type vuoto');\n\n  // human review\n  if (r.checked_copy !== 'SI') errs.push('checked_copy != SI');\n  if (r.checked_media !== 'SI') errs.push('checked_media != SI');\n  if (r.checked_link !== 'SI') errs.push('checked_link != SI');\n\n  // media validation\n  if (mediaCheck && r.media_validato !== 'SI') errs.push('media_validato != SI');\n\n  // consenso\n  const fonteSensible = ['foto_cliente','influencer','ugc'].includes(r.fonte_media);\n  if (fonteSensible && r.consenso_utilizzo !== 'SI') errs.push('consenso_utilizzo mancante');\n\n  // account social\n  const acc = accounts.find(a => a.canale === r.canale && a.attivo === 'SI');\n  if (!acc) errs.push('account social non attivo');\n  else {\n    const formats = String(acc.formati_permessi || '').split(',').map(s => s.trim());\n    if (!formats.includes(r.formato)) errs.push('formato non consentito per account');\n  }\n\n  // product/stock\n  if (r.product_id) {\n    const p = products.find(x => x.product_id === r.product_id);\n    if (p) {\n      if (p.prodotto_attivo !== 'SI') errs.push('prodotto non attivo');\n      if (stockCheck && p.stock_status === 'esaurito') errs.push('prodotto esaurito');\n    }\n  }\n\n  // promo\n  if (r.promo_id) {\n    const pr = promos.find(x => x.promo_id === r.promo_id);\n    if (!pr) errs.push('promo non trovata');\n    else {\n      if (pr.promo_attiva !== 'SI') errs.push('promo non attiva');\n      if (pr.promo_data_inizio && todayStr < pr.promo_data_inizio) errs.push('promo non ancora iniziata');\n      if (pr.promo_data_fine && todayStr > pr.promo_data_fine) errs.push('promo scaduta');\n      const channels = String(pr.canali_abilitati || '').split(',').map(s => s.trim());\n      if (channels.length && !channels.includes(r.canale)) errs.push('canale non abilitato per promo');\n      const prods = String(pr.prodotti_inclusi || '').toUpperCase();\n      if (prods !== 'TUTTI' && !prods.split(',').map(s => s.trim()).includes(r.product_id)) errs.push('prodotto non incluso in promo');\n    }\n  }\n\n  // UTM build\n  let utm_final = '';\n  if (r.link_prodotto) {\n    const sep = r.link_prodotto.includes('?') ? '&' : '?';\n    const params = new URLSearchParams({\n      utm_source: r.utm_source || r.canale,\n      utm_medium: r.utm_medium || 'social',\n      utm_campaign: r.utm_campaign || defaultUtm,\n      utm_content: r.utm_content || r.id_contenuto\n    });\n    utm_final = `${r.link_prodotto}${sep}${params.toString()}`;\n  }\n\n  // mediaUrls compact\n  const mediaUrls = [r.link_media_1, r.link_media_2, r.link_media_3, r.link_media_4, r.link_media_5, r.link_media_6, r.link_media_7].filter(u => u && String(u).trim() !== '');\n\n  out.push({ json: {\n    ...r,\n    _errs: errs,\n    _dryRun: dryRun,\n    _maxRetry: maxRetry,\n    _accountId: acc ? acc.platform_account_id : '',\n    _mediaUrls: mediaUrls,\n    _link_prodotto_finale: utm_final,\n    _lockId: `${r.id_contenuto}_${Date.now()}`,\n    _nowIso: nowIso\n  } });\n}\nreturn out;"
+      },
+      "id": "n7",
+      "name": "Validate All",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [560, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "loose" },
+          "conditions": [
+            { "id": "c1", "leftValue": "={{ $json._errs.length }}", "rightValue": 0, "operator": { "type": "number", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "n8",
+      "name": "IF Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [780, 400]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "CALENDARIO",
+        "columnToMatchOn": "id_contenuto",
+        "valueToMatchOn": "={{ $json.id_contenuto }}",
+        "valuesToSend": {
+          "values": [
+            { "column": "status", "value": "ERRORE" },
+            { "column": "errore_tecnico", "value": "={{ $json._errs.join('; ') }}" }
+          ]
+        }
+      },
+      "id": "n9",
+      "name": "Mark ERRORE Validation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1000, 540],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "CALENDARIO",
+        "columnToMatchOn": "id_contenuto",
+        "valueToMatchOn": "={{ $json.id_contenuto }}",
+        "valuesToSend": {
+          "values": [
+            { "column": "status", "value": "IN_PUBBLICAZIONE" },
+            { "column": "publish_lock_id", "value": "={{ $json._lockId }}" },
+            { "column": "link_prodotto_finale", "value": "={{ $json._link_prodotto_finale }}" },
+            { "column": "platform_account_id", "value": "={{ $json._accountId }}" }
+          ]
+        }
+      },
+      "id": "n10",
+      "name": "Lock + UTM",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1000, 280],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "loose" },
+          "conditions": [
+            { "id": "d1", "leftValue": "={{ $json._dryRun }}", "rightValue": "", "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "n11",
+      "name": "IF Dry Run",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1220, 280]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "LOG_PUBBLICAZIONI",
+        "valuesToSend": {
+          "values": [
+            { "column": "timestamp", "value": "={{ $json._nowIso }}" },
+            { "column": "id_contenuto", "value": "={{ $json.id_contenuto }}" },
+            { "column": "canale", "value": "={{ $json.canale }}" },
+            { "column": "formato", "value": "={{ $json.formato }}" },
+            { "column": "status_precedente", "value": "APPROVATO" },
+            { "column": "status_finale", "value": "DRY_RUN_OK" },
+            { "column": "messaggio", "value": "Dry run simulato, nessuna chiamata Blotato" }
+          ]
+        }
+      },
+      "id": "n12",
+      "name": "Log Dry Run",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1440, 160],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "CALENDARIO",
+        "columnToMatchOn": "id_contenuto",
+        "valueToMatchOn": "={{ $json.id_contenuto }}",
+        "valuesToSend": {
+          "values": [
+            { "column": "status", "value": "APPROVATO" },
+            { "column": "publish_lock_id", "value": "" }
+          ]
+        }
+      },
+      "id": "n20",
+      "name": "Reset Lock DryRun",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1660, 160],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.blotato.com/v1/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"accountId\": \"{{ $json._accountId }}\",\n  \"platform\": \"{{ $json.canale }}\",\n  \"mediaType\": \"{{ $json.media_type }}\",\n  \"mediaUrls\": {{ JSON.stringify($json._mediaUrls) }},\n  \"caption\": {{ JSON.stringify(($json.caption || '') + ($json.hashtag ? '\\n\\n' + $json.hashtag : '') + ($json._link_prodotto_finale ? '\\n\\n' + $json._link_prodotto_finale : '')) }}\n}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "n13",
+      "name": "Blotato Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 360],
+      "credentials": { "httpHeaderAuth": { "id": "BLOTATO", "name": "Blotato API" } },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "loose" },
+          "conditions": [
+            { "id": "s1", "leftValue": "={{ ($json.statusCode || 999) }}", "rightValue": 400, "operator": { "type": "number", "operation": "lt" } },
+            { "id": "s2", "leftValue": "={{ $json.error }}", "rightValue": "", "operator": { "type": "string", "operation": "empty", "singleValue": true } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "n14",
+      "name": "IF Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1660, 360]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "CALENDARIO",
+        "columnToMatchOn": "id_contenuto",
+        "valueToMatchOn": "={{ $('Validate All').item.json.id_contenuto }}",
+        "valuesToSend": {
+          "values": [
+            { "column": "status", "value": "PUBBLICATO" },
+            { "column": "blotato_post_id", "value": "={{ $json.id || $json.postId || '' }}" }
+          ]
+        }
+      },
+      "id": "n15",
+      "name": "Mark PUBBLICATO",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1880, 260],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "LOG_PUBBLICAZIONI",
+        "valuesToSend": {
+          "values": [
+            { "column": "timestamp", "value": "={{ $now.toISO() }}" },
+            { "column": "id_contenuto", "value": "={{ $('Validate All').item.json.id_contenuto }}" },
+            { "column": "canale", "value": "={{ $('Validate All').item.json.canale }}" },
+            { "column": "formato", "value": "={{ $('Validate All').item.json.formato }}" },
+            { "column": "status_precedente", "value": "IN_PUBBLICAZIONE" },
+            { "column": "status_finale", "value": "PUBBLICATO" },
+            { "column": "blotato_post_id", "value": "={{ $json.id || $json.postId || '' }}" },
+            { "column": "messaggio", "value": "ok" }
+          ]
+        }
+      },
+      "id": "n16",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2100, 260],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Validate All').item.json;\nconst retryCount = parseInt(ctx.retry_count || '0', 10);\nconst maxRetry = ctx._maxRetry || 2;\nconst nextRetry = retryCount + 1;\nconst definitive = nextRetry >= maxRetry;\nreturn [{ json: {\n  id_contenuto: ctx.id_contenuto,\n  canale: ctx.canale,\n  formato: ctx.formato,\n  retry_count: nextRetry,\n  last_retry_at: new Date().toISOString(),\n  definitive,\n  next_status: definitive ? 'ERRORE_MANUALE' : 'APPROVATO',\n  next_lock: definitive ? '' : '',\n  errore_tecnico: JSON.stringify($json).slice(0, 500)\n} }];"
+      },
+      "id": "n17",
+      "name": "Compute Retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1880, 460]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "CALENDARIO",
+        "columnToMatchOn": "id_contenuto",
+        "valueToMatchOn": "={{ $json.id_contenuto }}",
+        "valuesToSend": {
+          "values": [
+            { "column": "status", "value": "={{ $json.next_status }}" },
+            { "column": "publish_lock_id", "value": "={{ $json.next_lock }}" },
+            { "column": "retry_count", "value": "={{ $json.retry_count }}" },
+            { "column": "last_retry_at", "value": "={{ $json.last_retry_at }}" },
+            { "column": "errore_tecnico", "value": "={{ $json.errore_tecnico }}" }
+          ]
+        }
+      },
+      "id": "n18",
+      "name": "Mark Retry/Errore",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2100, 460],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "LOG_PUBBLICAZIONI",
+        "valuesToSend": {
+          "values": [
+            { "column": "timestamp", "value": "={{ $now.toISO() }}" },
+            { "column": "id_contenuto", "value": "={{ $json.id_contenuto }}" },
+            { "column": "canale", "value": "={{ $json.canale }}" },
+            { "column": "formato", "value": "={{ $json.formato }}" },
+            { "column": "status_precedente", "value": "IN_PUBBLICAZIONE" },
+            { "column": "status_finale", "value": "={{ $json.next_status }}" },
+            { "column": "errore", "value": "={{ $json.errore_tecnico }}" }
+          ]
+        }
+      },
+      "id": "n19",
+      "name": "Log Errore",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2320, 460],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    }
+  ],
+  "connections": {
+    "Schedule 15min": { "main": [[{ "node": "Read SETTINGS", "type": "main", "index": 0 }]] },
+    "Read SETTINGS": { "main": [[{ "node": "Read CALENDARIO", "type": "main", "index": 0 }]] },
+    "Read CALENDARIO": { "main": [[{ "node": "Read ACCOUNT_SOCIAL", "type": "main", "index": 0 }]] },
+    "Read ACCOUNT_SOCIAL": { "main": [[{ "node": "Read PRODOTTI", "type": "main", "index": 0 }]] },
+    "Read PRODOTTI": { "main": [[{ "node": "Read PROMO", "type": "main", "index": 0 }]] },
+    "Read PROMO": { "main": [[{ "node": "Validate All", "type": "main", "index": 0 }]] },
+    "Validate All": { "main": [[{ "node": "IF Valid", "type": "main", "index": 0 }]] },
+    "IF Valid": {
+      "main": [
+        [{ "node": "Lock + UTM", "type": "main", "index": 0 }],
+        [{ "node": "Mark ERRORE Validation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Lock + UTM": { "main": [[{ "node": "IF Dry Run", "type": "main", "index": 0 }]] },
+    "IF Dry Run": {
+      "main": [
+        [{ "node": "Log Dry Run", "type": "main", "index": 0 }],
+        [{ "node": "Blotato Publish", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log Dry Run": { "main": [[{ "node": "Reset Lock DryRun", "type": "main", "index": 0 }]] },
+    "Blotato Publish": { "main": [[{ "node": "IF Success", "type": "main", "index": 0 }]] },
+    "IF Success": {
+      "main": [
+        [{ "node": "Mark PUBBLICATO", "type": "main", "index": 0 }],
+        [{ "node": "Compute Retry", "type": "main", "index": 0 }]
+      ]
+    },
+    "Mark PUBBLICATO": { "main": [[{ "node": "Log Success", "type": "main", "index": 0 }]] },
+    "Compute Retry": { "main": [[{ "node": "Mark Retry/Errore", "type": "main", "index": 0 }]] },
+    "Mark Retry/Errore": { "main": [[{ "node": "Log Errore", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "timezone": "Europe/Rome", "executionOrder": "v1", "errorWorkflow": "SOCIAL_H_ERROR_HANDLER" }
+}

@@ -1,0 +1,51 @@
+Agisci come Social Media Manager senior per un brand di abbigliamento e-commerce.
+
+Devi creare un piano editoriale settimanale per Instagram, Facebook, TikTok e Pinterest.
+
+Obiettivo:
+Generare contenuti che alternino ispirazione outfit, vendita, educazione, community e lifestyle.
+
+Dati brand:
+{{BRAND_DATA}}
+
+Prodotti disponibili:
+{{PRODUCTS_DATA}}
+
+Regole:
+- Usa solo prodotti con immagini disponibili.
+- Alterna formati: post, carosello, reel, story, pin.
+- Non fare contenuti tutti troppo commerciali.
+- Mantieni tono moderno, fashion, chiaro e desiderabile.
+- Ogni contenuto deve avere un hook forte.
+- Ogni contenuto deve avere una CTA.
+- Le caption devono essere pronte da pubblicare.
+- Hashtag realistici e non eccessivi.
+- Per TikTok/Reel genera anche un'idea video breve.
+- Per caroselli genera anche struttura slide-by-slide sintetica.
+- Non inventare prezzi, disponibilita, taglie.
+- Evita claim assoluti ("il migliore", "imperdibile", "garantito").
+
+Output:
+Restituisci solo JSON valido, senza spiegazioni.
+
+Schema JSON:
+[
+  {
+    "data_pubblicazione": "YYYY-MM-DD",
+    "ora_pubblicazione": "HH:MM",
+    "canale": "instagram|facebook|tiktok|pinterest",
+    "formato": "post|carousel|reel|story|pin",
+    "obiettivo": "vendita|awareness|community|educazione|ispirazione",
+    "product_id": "",
+    "nome_prodotto": "",
+    "tema": "",
+    "hook": "",
+    "caption": "",
+    "hashtag": "",
+    "cta": "",
+    "idea_visual": "",
+    "idea_video": "",
+    "struttura_carosello": "",
+    "status": "BOZZA"
+  }
+]

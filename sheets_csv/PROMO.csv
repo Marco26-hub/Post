@@ -1,0 +1,2 @@
+promo_id,promo_nome,promo_codice,promo_attiva,promo_data_inizio,promo_data_fine,descrizione,prodotti_inclusi,canali_abilitati,note
+PR001,Saldi Estate,ESTATE26,NO,2026-06-15,2026-07-15,Sconto 20% collezione estate,TUTTI,"instagram,facebook,tiktok",Esempio template

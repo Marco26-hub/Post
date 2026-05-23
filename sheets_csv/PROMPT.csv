@@ -1,0 +1,6 @@
+prompt_id,nome,versione,scope,testo,note
+PR_A,piano_settimanale,1,SOCIAL_A,vedi prompts/A_piano_settimanale.txt,
+PR_B,contenuto_da_riga,1,SOCIAL_B,vedi prompts/B_contenuto_da_riga.txt,
+PR_D,carosello,1,SOCIAL_D,vedi prompts/D_carosello.txt,
+PR_E,reel,1,SOCIAL_E,vedi prompts/E_reel.txt,
+PR_F,report,1,SOCIAL_F,vedi prompts/F_report.txt,

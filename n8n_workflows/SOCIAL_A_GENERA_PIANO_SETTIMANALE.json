@@ -1,0 +1,123 @@
+{
+  "name": "SOCIAL_A_GENERA_PIANO_SETTIMANALE",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 * * 1" }] } },
+      "id": "n1",
+      "name": "Lun 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "BRAND"
+      },
+      "id": "n2",
+      "name": "Read BRAND",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [420, 200],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "PRODOTTI"
+      },
+      "id": "n3",
+      "name": "Read PRODOTTI",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [420, 400],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const brand = $('Read BRAND').all()[0]?.json || {};\nconst products = $('Read PRODOTTI').all().map(i => i.json).filter(p => (p.priorita === 'alta' || p.priorita === 'media') && p.link_img_1);\nreturn [{ json: { brand, products } }];"
+      },
+      "id": "n4",
+      "name": "Prep Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 4000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Sei Social Media Manager per brand abbigliamento. Crea piano editoriale 7 giorni per IG/FB/TikTok/Pinterest.\\n\\nBRAND:\\n\" + JSON.stringify($json.brand) + \"\\n\\nPRODOTTI:\\n\" + JSON.stringify($json.products) + \"\\n\\nRegole: alterna post/carousel/reel/story/pin. Tono moderno fashion. Hook+CTA. Hashtag realistici. Non inventare prezzi.\\n\\nOutput SOLO JSON array con 7-10 oggetti: [{\\\"data_pubblicazione\\\":\\\"YYYY-MM-DD\\\",\\\"ora_pubblicazione\\\":\\\"HH:MM\\\",\\\"canale\\\":\\\"\\\",\\\"formato\\\":\\\"\\\",\\\"obiettivo\\\":\\\"\\\",\\\"product_id\\\":\\\"\\\",\\\"nome_prodotto\\\":\\\"\\\",\\\"tema\\\":\\\"\\\",\\\"hook\\\":\\\"\\\",\\\"caption\\\":\\\"\\\",\\\"hashtag\\\":\\\"\\\",\\\"cta\\\":\\\"\\\",\\\"status\\\":\\\"BOZZA\\\"}]\"\n    }\n  ]\n}"
+      },
+      "id": "n5",
+      "name": "Claude API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 300],
+      "credentials": { "httpHeaderAuth": { "id": "ANTHROPIC", "name": "Anthropic x-api-key" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const txt = $json.content?.[0]?.text || '';\nconst m = txt.match(/\\[[\\s\\S]*\\]/);\nif (!m) throw new Error('No JSON array');\nconst arr = JSON.parse(m[0]);\nconst pad = n => String(n).padStart(2,'0');\nreturn arr.map((r, i) => {\n  const id = `C${Date.now()}_${i}`;\n  return { json: { id_contenuto: id, ...r } };\n});"
+      },
+      "id": "n6",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "CALENDARIO",
+        "valuesToSend": {
+          "values": [
+            { "column": "id_contenuto", "value": "={{ $json.id_contenuto }}" },
+            { "column": "data_pubblicazione", "value": "={{ $json.data_pubblicazione }}" },
+            { "column": "ora_pubblicazione", "value": "={{ $json.ora_pubblicazione }}" },
+            { "column": "canale", "value": "={{ $json.canale }}" },
+            { "column": "formato", "value": "={{ $json.formato }}" },
+            { "column": "obiettivo", "value": "={{ $json.obiettivo }}" },
+            { "column": "product_id", "value": "={{ $json.product_id }}" },
+            { "column": "nome_prodotto", "value": "={{ $json.nome_prodotto }}" },
+            { "column": "tema", "value": "={{ $json.tema }}" },
+            { "column": "hook", "value": "={{ $json.hook }}" },
+            { "column": "caption", "value": "={{ $json.caption }}" },
+            { "column": "hashtag", "value": "={{ $json.hashtag }}" },
+            { "column": "cta", "value": "={{ $json.cta }}" },
+            { "column": "status", "value": "BOZZA" }
+          ]
+        }
+      },
+      "id": "n7",
+      "name": "Append CALENDARIO",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1300, 300],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    }
+  ],
+  "connections": {
+    "Lun 08:00": { "main": [[{ "node": "Read BRAND", "type": "main", "index": 0 }, { "node": "Read PRODOTTI", "type": "main", "index": 0 }]] },
+    "Read BRAND": { "main": [[{ "node": "Prep Context", "type": "main", "index": 0 }]] },
+    "Read PRODOTTI": { "main": [[{ "node": "Prep Context", "type": "main", "index": 0 }]] },
+    "Prep Context": { "main": [[{ "node": "Claude API", "type": "main", "index": 0 }]] },
+    "Claude API": { "main": [[{ "node": "Parse JSON", "type": "main", "index": 0 }]] },
+    "Parse JSON": { "main": [[{ "node": "Append CALENDARIO", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "timezone": "Europe/Rome", "executionOrder": "v1" }
+}

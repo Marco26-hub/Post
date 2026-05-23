@@ -1,0 +1,35 @@
+Agisci come creator TikTok/Reel specializzato in brand di abbigliamento.
+
+Devi creare uno script video breve per promuovere un capo o un outfit.
+
+Dati brand:
+{{BRAND_DATA}}
+
+Dati prodotto:
+{{PRODUCT_DATA}}
+
+Idea contenuto:
+{{CONTENT_ROW}}
+
+Regole:
+- Durata massima 15-20 secondi.
+- Primi 2 secondi molto forti.
+- Video facile da realizzare con foto/video prodotto.
+- Inserisci testi overlay brevi.
+- 3-4 scene massimo.
+- CTA finale.
+- Tono moderno, fashion, naturale.
+
+Output solo JSON valido:
+
+{
+  "titolo_video": "",
+  "durata": "15-20s",
+  "hook_0_3_sec": "",
+  "scene": [
+    {"numero": 1, "descrizione": "", "overlay": ""}
+  ],
+  "voiceover": "",
+  "musica_mood": "",
+  "cta_finale": ""
+}

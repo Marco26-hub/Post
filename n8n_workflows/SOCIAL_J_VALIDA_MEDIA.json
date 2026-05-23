@@ -1,0 +1,95 @@
+{
+  "name": "SOCIAL_J_VALIDA_MEDIA",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] } },
+      "id": "n1",
+      "name": "Schedule 30min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": { "operation": "read", "documentId": "={{ $env.SHEET_ID }}", "sheetName": "CALENDARIO" },
+      "id": "n2",
+      "name": "Read CALENDARIO",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [420, 300],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.filter(i => {\n  const r = i.json;\n  return ['DA_APPROVARE','APPROVATO'].includes(r.status) && r.media_validato !== 'SI' && r.link_media_1;\n});"
+      },
+      "id": "n3",
+      "name": "Filter Da Validare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fix: process ALL items, not just items[0]\nreturn items.map(item => {\n  const r = item.json;\n  const urls = [r.link_media_1, r.link_media_2, r.link_media_3, r.link_media_4, r.link_media_5, r.link_media_6, r.link_media_7].filter(u => u && String(u).trim() !== '');\n  const formato = r.formato;\n  let minRequired = 1;\n  if (formato === 'carousel') minRequired = 3;\n  return { json: { ...r, _urls: urls, _minRequired: minRequired, _enoughCount: urls.length >= minRequired } };\n});"
+      },
+      "id": "n4",
+      "name": "Build URL list",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "method": "HEAD",
+        "url": "={{ $json.link_media_1 }}",
+        "options": { "response": { "response": { "neverError": true } }, "redirect": { "redirect": { "followRedirects": true } } }
+      },
+      "id": "n5",
+      "name": "HEAD media_1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Build URL list').item.json;\nconst code = $json.statusCode || 0;\nconst ok = code >= 200 && code < 400 && ctx._enoughCount;\nreturn [{ json: { id_contenuto: ctx.id_contenuto, ok, code, minRequired: ctx._minRequired, count: ctx._urls.length } }];"
+      },
+      "id": "n6",
+      "name": "Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "CALENDARIO",
+        "columnToMatchOn": "id_contenuto",
+        "valueToMatchOn": "={{ $json.id_contenuto }}",
+        "valuesToSend": {
+          "values": [
+            { "column": "media_validato", "value": "={{ $json.ok ? 'SI' : 'NO' }}" },
+            { "column": "errore_tecnico", "value": "={{ $json.ok ? '' : ('media KO code=' + $json.code + ' count=' + $json.count + '/' + $json.minRequired) }}" }
+          ]
+        }
+      },
+      "id": "n7",
+      "name": "Update media_validato",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1520, 300],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    }
+  ],
+  "connections": {
+    "Schedule 30min": { "main": [[{ "node": "Read CALENDARIO", "type": "main", "index": 0 }]] },
+    "Read CALENDARIO": { "main": [[{ "node": "Filter Da Validare", "type": "main", "index": 0 }]] },
+    "Filter Da Validare": { "main": [[{ "node": "Build URL list", "type": "main", "index": 0 }]] },
+    "Build URL list": { "main": [[{ "node": "HEAD media_1", "type": "main", "index": 0 }]] },
+    "HEAD media_1": { "main": [[{ "node": "Decide", "type": "main", "index": 0 }]] },
+    "Decide": { "main": [[{ "node": "Update media_validato", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "timezone": "Europe/Rome" }
+}

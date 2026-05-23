@@ -1,0 +1,11 @@
+chiave,valore,descrizione
+automation_enabled,TRUE,Se FALSE nessun contenuto viene pubblicato
+dry_run,FALSE,Se TRUE il sistema simula senza pubblicare
+timezone,Europe/Rome,Timezone ufficiale del workflow
+max_retry,2,Numero massimo di retry automatici
+default_utm_campaign,social_default,Campagna UTM di default
+telegram_notifications,TRUE,Abilita notifiche Telegram
+backup_enabled,TRUE,Abilita backup giornaliero
+approval_required,TRUE,Pubblica solo contenuti approvati
+media_validation_required,TRUE,Blocca contenuti con media non validi
+stock_check_required,TRUE,Blocca prodotti non attivi o esauriti

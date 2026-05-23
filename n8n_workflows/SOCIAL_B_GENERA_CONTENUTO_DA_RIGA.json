@@ -1,0 +1,142 @@
+{
+  "name": "SOCIAL_B_GENERA_CONTENUTO_DA_RIGA",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] } },
+      "id": "n1",
+      "name": "Schedule 30min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "CALENDARIO"
+      },
+      "id": "n2",
+      "name": "Read CALENDARIO",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [420, 300],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.filter(i => i.json.status === 'IDEA');"
+      },
+      "id": "n3",
+      "name": "Filter IDEA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "BRAND"
+      },
+      "id": "n4",
+      "name": "Read BRAND",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [860, 200],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "PRODOTTI"
+      },
+      "id": "n5",
+      "name": "Read PRODOTTI",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [860, 400],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const brand = $('Read BRAND').all()[0]?.json || {};\nconst products = $('Read PRODOTTI').all().map(i => i.json);\nconst rows = $('Filter IDEA').all().map(i => i.json);\nreturn rows.map(r => {\n  const prod = products.find(p => p.product_id === r.product_id) || {};\n  return { json: { row: r, brand, product: prod } };\n});"
+      },
+      "id": "n6",
+      "name": "Merge Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 2000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Agisci come copywriter social per brand abbigliamento. Trasforma idea editoriale in contenuto pronto.\\n\\nBRAND:\\n\" + JSON.stringify($json.brand) + \"\\n\\nPRODOTTO:\\n\" + JSON.stringify($json.product) + \"\\n\\nIDEA:\\n\" + JSON.stringify($json.row) + \"\\n\\nRegole: caption naturale, hook forte, CTA, 8-12 hashtag. Non inventare prezzi/taglie. Se reel: script 15-20s. Se carousel: testo slide-by-slide.\\n\\nOutput SOLO JSON: {\\\"hook\\\":\\\"\\\",\\\"caption\\\":\\\"\\\",\\\"hashtag\\\":\\\"\\\",\\\"cta\\\":\\\"\\\",\\\"idea_visual\\\":\\\"\\\",\\\"script_video\\\":\\\"\\\",\\\"struttura_carosello\\\":\\\"\\\",\\\"status\\\":\\\"DA_APPROVARE\\\"}\"\n    }\n  ]\n}"
+      },
+      "id": "n7",
+      "name": "Claude API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300],
+      "credentials": { "httpHeaderAuth": { "id": "ANTHROPIC", "name": "Anthropic x-api-key" } },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const txt = $json.content?.[0]?.text || '';\nconst m = txt.match(/\\{[\\s\\S]*\\}/);\nif (!m) throw new Error('No JSON in response');\nconst parsed = JSON.parse(m[0]);\nconst row = $('Merge Context').item.json.row;\nreturn [{ json: { id_contenuto: row.id_contenuto, ...parsed } }];"
+      },
+      "id": "n8",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "CALENDARIO",
+        "columnToMatchOn": "id_contenuto",
+        "valueToMatchOn": "={{ $json.id_contenuto }}",
+        "valuesToSend": {
+          "values": [
+            { "column": "hook", "value": "={{ $json.hook }}" },
+            { "column": "caption", "value": "={{ $json.caption }}" },
+            { "column": "hashtag", "value": "={{ $json.hashtag }}" },
+            { "column": "cta", "value": "={{ $json.cta }}" },
+            { "column": "status", "value": "DA_APPROVARE" }
+          ]
+        }
+      },
+      "id": "n9",
+      "name": "Update Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1740, 300],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    }
+  ],
+  "connections": {
+    "Schedule 30min": { "main": [[{ "node": "Read CALENDARIO", "type": "main", "index": 0 }]] },
+    "Read CALENDARIO": { "main": [[{ "node": "Filter IDEA", "type": "main", "index": 0 }]] },
+    "Filter IDEA": { "main": [[{ "node": "Read BRAND", "type": "main", "index": 0 }, { "node": "Read PRODOTTI", "type": "main", "index": 0 }]] },
+    "Read BRAND": { "main": [[{ "node": "Merge Context", "type": "main", "index": 0 }]] },
+    "Read PRODOTTI": { "main": [[{ "node": "Merge Context", "type": "main", "index": 0 }]] },
+    "Merge Context": { "main": [[{ "node": "Claude API", "type": "main", "index": 0 }]] },
+    "Claude API": { "main": [[{ "node": "Parse JSON", "type": "main", "index": 0 }]] },
+    "Parse JSON": { "main": [[{ "node": "Update Row", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "timezone": "Europe/Rome", "executionOrder": "v1" }
+}

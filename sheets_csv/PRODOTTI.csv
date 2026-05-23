@@ -1,0 +1,4 @@
+product_id,nome_prodotto,categoria,collezione,prezzo,prezzo_promo,link_prodotto,link_img_1,link_img_2,link_img_3,colori,taglie,mood,target,priorita,prodotto_attivo,stock_status,stock_quantity,data_ultimo_controllo_stock,note
+P001,Blazer in lino,giacche,primavera-estate,129.00,,https://example.com/p/blazer-lino,https://drive.google.com/uc?id=ID1,https://drive.google.com/uc?id=ID2,,beige/nero,XS-XL,elegante,donna 30+,alta,SI,disponibile,50,2026-05-15,
+P002,Jeans dritti vita alta,jeans,permanente,89.00,,https://example.com/p/jeans-dritti,https://drive.google.com/uc?id=ID3,,,denim chiaro,24-32,casual,unisex,alta,SI,disponibile,120,2026-05-15,
+P003,Abito midi lino,abiti,primavera-estate,99.00,79.00,https://example.com/p/abito-lino,https://drive.google.com/uc?id=ID4,,,panna/verde,XS-L,minimal,donna,media,SI,disponibile,30,2026-05-15,

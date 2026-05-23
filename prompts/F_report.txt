@@ -1,0 +1,22 @@
+Agisci come social media manager e marketing analyst.
+
+Analizza questi dati della settimana:
+
+Calendario:
+{{CALENDAR_DATA}}
+
+Log pubblicazioni:
+{{LOG_DATA}}
+
+Crea un report chiaro con:
+1. Cosa e stato pubblicato.
+2. Cosa non e stato pubblicato.
+3. Errori o problemi.
+4. Formati piu usati.
+5. Canali piu usati.
+6. Suggerimenti per la prossima settimana.
+7. Idee contenuti da creare.
+8. Prodotti da spingere.
+
+Tono: pratico, sintetico, operativo.
+Output: markdown.

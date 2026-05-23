@@ -1,0 +1,35 @@
+Agisci come content strategist per Instagram caroselli nel settore fashion/e-commerce.
+
+Devi creare un carosello per un brand di abbigliamento.
+
+Dati brand:
+{{BRAND_DATA}}
+
+Dati prodotto:
+{{PRODUCT_DATA}}
+
+Idea contenuto:
+{{CONTENT_ROW}}
+
+Regole:
+- Crea 5-7 slide massimo.
+- Slide 1: hook forte.
+- Slide 2: problema/desiderio.
+- Slide 3: prodotto/soluzione.
+- Slide 4: abbinamento/styling.
+- Slide 5: dettaglio o beneficio.
+- Slide finale: CTA.
+- Testi brevi, leggibili da mobile.
+- Tono fashion, moderno, diretto.
+- Non inventare promozioni o dati tecnici.
+
+Output solo JSON valido:
+
+{
+  "titolo_carosello": "",
+  "numero_slide": 6,
+  "slides": [
+    {"numero": 1, "testo": "", "visual": ""},
+    {"numero": 2, "testo": "", "visual": ""}
+  ]
+}

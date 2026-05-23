@@ -1,0 +1,6 @@
+canale,nome_account,platform_account_id,attivo,formati_permessi,default_media_type,note
+instagram,Brand Official,IG_REPLACE_ME,SI,"post,carousel,reel,story",image,Account principale Instagram
+facebook,Brand Official,FB_REPLACE_ME,SI,"post,carousel,video",image,Pagina Facebook
+tiktok,Brand Official,TT_REPLACE_ME,SI,"video,reel",video,Profilo TikTok
+pinterest,Brand Official,PIN_REPLACE_ME,SI,pin,pin,Account Pinterest
+youtube_shorts,Brand Official,YT_REPLACE_ME,SI,short,short,Canale YouTube Shorts

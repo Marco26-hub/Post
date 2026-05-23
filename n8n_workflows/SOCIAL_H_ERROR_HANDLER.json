@@ -1,0 +1,64 @@
+{
+  "name": "SOCIAL_H_ERROR_HANDLER",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "n1",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $json;\n// id_contenuto: cerca nei parametri del nodo fallito, non nel nome nodo\nconst nodeData = e.execution?.data?.resultData?.runData || {};\nlet id_contenuto = '';\nfor (const nodeName of Object.keys(nodeData)) {\n  const runs = nodeData[nodeName];\n  if (runs && runs[0]) {\n    const item = runs[0]?.data?.main?.[0]?.[0]?.json;\n    if (item?.id_contenuto) { id_contenuto = item.id_contenuto; break; }\n  }\n}\nreturn [{ json: {\n  timestamp: new Date().toISOString(),\n  workflow_name: e.workflow?.name || 'unknown',\n  execution_id: e.execution?.id || '',\n  last_node: e.execution?.lastNodeExecuted || '',\n  id_contenuto,\n  errore: e.execution?.error?.message || JSON.stringify(e).slice(0, 500)\n} }];"
+      },
+      "id": "n2",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "LOG_PUBBLICAZIONI",
+        "valuesToSend": {
+          "values": [
+            { "column": "timestamp", "value": "={{ $json.timestamp }}" },
+            { "column": "id_contenuto", "value": "={{ $json.id_contenuto }}" },
+            { "column": "status_finale", "value": "ERRORE_WORKFLOW" },
+            { "column": "messaggio", "value": "={{ $json.workflow_name }} - {{ $json.execution_id }}" },
+            { "column": "errore", "value": "={{ $json.errore }}" }
+          ]
+        }
+      },
+      "id": "n3",
+      "name": "Append LOG",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [640, 300],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=⚠️ Errore automazione social\\n\\nWorkflow: {{ $json.workflow_name }}\\nExecution: {{ $json.execution_id }}\\n\\nErrore:\\n{{ $json.errore }}"
+      },
+      "id": "n4",
+      "name": "Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [860, 300],
+      "credentials": { "telegramApi": { "id": "TELEGRAM", "name": "Telegram Bot" } },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Error Trigger": { "main": [[{ "node": "Normalize", "type": "main", "index": 0 }]] },
+    "Normalize": { "main": [[{ "node": "Append LOG", "type": "main", "index": 0 }]] },
+    "Append LOG": { "main": [[{ "node": "Telegram Alert", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "timezone": "Europe/Rome" }
+}

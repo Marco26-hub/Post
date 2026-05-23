@@ -1,0 +1,101 @@
+{
+  "name": "SOCIAL_I_BACKUP_GIORNALIERO",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 3 * * *" }] } },
+      "id": "n1",
+      "name": "Daily 03:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": { "operation": "read", "documentId": "={{ $env.SHEET_ID }}", "sheetName": "CALENDARIO" },
+      "id": "n2",
+      "name": "Read CALENDARIO",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [420, 200],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": { "operation": "read", "documentId": "={{ $env.SHEET_ID }}", "sheetName": "PRODOTTI" },
+      "id": "n3",
+      "name": "Read PRODOTTI",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [420, 320],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": { "operation": "read", "documentId": "={{ $env.SHEET_ID }}", "sheetName": "LOG_PUBBLICAZIONI" },
+      "id": "n4",
+      "name": "Read LOG",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [420, 440],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "function toCsv(rows){if(!rows.length)return '';const keys=Object.keys(rows[0]);const esc=v=>{const s=String(v??'');return /[\",\\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s};return [keys.join(','),...rows.map(r=>keys.map(k=>esc(r[k])).join(','))].join('\\n')}\nconst pad=n=>String(n).padStart(2,'0');\nconst d=new Date();const date=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;\nconst cal=$('Read CALENDARIO').all().map(i=>i.json);\nconst prod=$('Read PRODOTTI').all().map(i=>i.json);\nconst log=$('Read LOG').all().map(i=>i.json);\nreturn [\n  {json:{name:`backup_social_calendario_${date}.csv`,content:toCsv(cal)}},\n  {json:{name:`backup_social_prodotti_${date}.csv`,content:toCsv(prod)}},\n  {json:{name:`backup_social_log_${date}.csv`,content:toCsv(log)}}\n];"
+      },
+      "id": "n5",
+      "name": "Build CSV",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 320]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "binaryData": false,
+        "fileContent": "={{ $json.content }}",
+        "name": "={{ $json.name }}",
+        "driveId": { "__rl": true, "mode": "list", "value": "My Drive" },
+        "folderId": { "__rl": true, "mode": "id", "value": "={{ $env.BACKUP_FOLDER_ID }}" },
+        "options": {}
+      },
+      "id": "n6",
+      "name": "Upload Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [860, 320],
+      "credentials": { "googleDriveOAuth2Api": { "id": "GDRIVE", "name": "Google Drive" } },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.SHEET_ID }}",
+        "sheetName": "BACKUP_LOG",
+        "valuesToSend": {
+          "values": [
+            { "column": "timestamp", "value": "={{ $now.toISO() }}" },
+            { "column": "nome_file", "value": "={{ $('Build CSV').item.json.name }}" },
+            { "column": "cartella_drive", "value": "={{ $env.BACKUP_FOLDER_ID }}" },
+            { "column": "status", "value": "={{ $json.id ? 'OK' : 'ERRORE' }}" },
+            { "column": "errore", "value": "={{ $json.id ? '' : JSON.stringify($json) }}" }
+          ]
+        }
+      },
+      "id": "n7",
+      "name": "Append BACKUP_LOG",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1080, 320],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "GSHEETS", "name": "Google Sheets" } }
+    }
+  ],
+  "connections": {
+    "Daily 03:00": { "main": [[
+      { "node": "Read CALENDARIO", "type": "main", "index": 0 },
+      { "node": "Read PRODOTTI", "type": "main", "index": 0 },
+      { "node": "Read LOG", "type": "main", "index": 0 }
+    ]] },
+    "Read LOG": { "main": [[{ "node": "Build CSV", "type": "main", "index": 0 }]] },
+    "Build CSV": { "main": [[{ "node": "Upload Drive", "type": "main", "index": 0 }]] },
+    "Upload Drive": { "main": [[{ "node": "Append BACKUP_LOG", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "timezone": "Europe/Rome" }
+}
